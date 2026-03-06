@@ -59,6 +59,7 @@ export class TriangulateSolver extends BaseSolver {
 
     this.output = {
       pts: this.input.pts,
+      bounds: this.input.bounds,
       validTris,
     }
 

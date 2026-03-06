@@ -28,6 +28,7 @@ export class MergeCellsSolver extends BaseSolver {
 
     this.output = {
       pts: this.input.pts,
+      bounds: this.input.bounds,
       validTris: this.input.validTris,
       cells: merged.cells,
       depths: merged.depths,

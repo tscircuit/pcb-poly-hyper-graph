@@ -70,6 +70,7 @@ export type TriangulateStageInput = GeneratePointsStageOutput & {
 }
 
 export type TriangulateStageOutput = GeneratePointsStageOutput & {
+  bounds: Bounds
   validTris: Triangle[]
 }
 

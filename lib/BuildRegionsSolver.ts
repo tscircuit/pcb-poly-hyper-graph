@@ -1,6 +1,7 @@
 import { BaseSolver } from "@tscircuit/solver-utils"
 import type { GraphicsObject } from "graphics-debug"
 import { buildRegionsFromCells } from "./buildRegionsFromCells"
+import { clampPointToBounds } from "./clampPointToBounds"
 import type { ConvexRegionsComputeResult, MergeCellsStageOutput } from "./types"
 
 export class BuildRegionsSolver extends BaseSolver {
@@ -13,9 +14,15 @@ export class BuildRegionsSolver extends BaseSolver {
   }
 
   override _step(): void {
-    const { regions, hulls } = buildRegionsFromCells(this.input)
+    const boundedPts = this.input.pts.map((pt) =>
+      clampPointToBounds(pt, this.input.bounds),
+    )
+    const { regions, hulls } = buildRegionsFromCells({
+      ...this.input,
+      pts: boundedPts,
+    })
     this.output = {
-      pts: this.input.pts,
+      pts: boundedPts,
       validTris: this.input.validTris,
       regions,
       hulls,

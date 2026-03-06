@@ -42,6 +42,7 @@ export class ConvexRegionsSolver extends BasePipelineSolver<ConvexRegionsCompute
       return [
         {
           pts: triangulated.pts,
+          bounds: triangulated.bounds,
           validTris: triangulated.validTris,
           concavityTolerance: instance.inputProblem.concavityTolerance,
           usePolyanyaMerge: instance.inputProblem.usePolyanyaMerge,

@@ -1,4 +1,5 @@
 import { constrainedDelaunay } from "./constrainedDelaunay"
+import { clampPointToBounds } from "./clampPointToBounds"
 import { delaunay } from "./delaunay"
 import { filterTris } from "./filterTris"
 import { generateBoundaryPoints } from "./generateBoundaryPoints"
@@ -76,17 +77,18 @@ export const computeConvexRegions = (
       ? mergeCellsPolyanya({ triangles: validTris, pts })
       : mergeCells({ triangles: validTris, pts, concavityTolerance })
 
+  const boundedPts = pts.map((pt) => clampPointToBounds(pt, bounds))
   const regions = cells.map((cell) =>
-    cell.map((i) => pts[i]).filter(isDefinedPoint),
+    cell.map((i) => boundedPts[i]).filter(isDefinedPoint),
   )
   const hulls = cells.map((cell) =>
-    hullIdx(cell, pts)
-      .map((i) => pts[i])
+    hullIdx(cell, boundedPts)
+      .map((i) => boundedPts[i])
       .filter(isDefinedPoint),
   )
 
   return {
-    pts,
+    pts: boundedPts,
     validTris,
     regions,
     hulls,
