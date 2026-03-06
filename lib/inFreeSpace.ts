@@ -12,20 +12,23 @@ export const inFreeSpace = (params: {
 }): boolean => {
   const { px, py, bounds, vias, clearance, rects, polygons } = params
   const { minX, maxX, minY, maxY } = bounds
+  const maxDim = Math.max(maxX - minX, maxY - minY, 1)
+  const eps = maxDim * 1e-6
   if (
-    px < minX - 0.1 ||
-    px > maxX + 0.1 ||
-    py < minY - 0.1 ||
-    py > maxY + 0.1
+    px < minX - eps ||
+    px > maxX + eps ||
+    py < minY - eps ||
+    py > maxY + eps
   ) {
     return false
   }
 
   for (const via of vias) {
     const radius = via.diameter / 2 + clearance
+    const effectiveRadius = Math.max(0, radius - eps)
     if (
       (px - via.center.x) ** 2 + (py - via.center.y) ** 2 <
-      radius * radius - 0.1
+      effectiveRadius * effectiveRadius
     ) {
       return false
     }
@@ -34,6 +37,8 @@ export const inFreeSpace = (params: {
   for (const rect of rects) {
     const halfWidth = rect.width / 2 + clearance
     const halfHeight = rect.height / 2 + clearance
+    const effectiveHalfWidth = Math.max(0, halfWidth - eps)
+    const effectiveHalfHeight = Math.max(0, halfHeight - eps)
     const dx = px - rect.center.x
     const dy = py - rect.center.y
     const cosTheta = Math.cos(rect.ccwRotation)
@@ -42,8 +47,8 @@ export const inFreeSpace = (params: {
     const localY = -dx * sinTheta + dy * cosTheta
 
     if (
-      Math.abs(localX) < halfWidth - 0.1 &&
-      Math.abs(localY) < halfHeight - 0.1
+      Math.abs(localX) < effectiveHalfWidth &&
+      Math.abs(localY) < effectiveHalfHeight
     ) {
       return false
     }
