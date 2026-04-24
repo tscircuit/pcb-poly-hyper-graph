@@ -1,8 +1,14 @@
 import { AutoroutingPipelineSolver4_TinyHypergraph } from "@tscircuit/capacity-autorouter"
 import {
+  applySerializedRegionNetIdsToLoadedProblem,
   buildPolyHyperGraphFromRegions,
   computeConvexRegions,
+  getAvailableZFromMask,
+  getObstacleLayerMask,
+  getOffsetPolygonPoints,
   type LayerMergeMode,
+  type PolyHyperGraphObstacleRegion,
+  type Polygon,
   type Rect,
 } from "../lib/index"
 
@@ -27,7 +33,7 @@ type SimpleRouteJson = {
   defaultObstacleMargin?: number
   bounds: { minX: number; maxX: number; minY: number; maxY: number }
   obstacles?: Array<{
-    type: "rect"
+    type: "rect" | "oval"
     center: { x: number; y: number }
     width: number
     height: number
@@ -35,6 +41,7 @@ type SimpleRouteJson = {
     zLayers?: number[]
     ccwRotationDegrees?: number
     isCopperPour?: boolean
+    connectedTo?: string[]
   }>
   connections: SimpleRouteConnection[]
 }
@@ -207,19 +214,124 @@ const getRectsFromSrj = (srj: SimpleRouteJson): Rect[] =>
       isCopperPour: obstacle.isCopperPour,
     }))
 
+const getRotationRadians = (
+  obstacle: NonNullable<SimpleRouteJson["obstacles"]>[number],
+) => ((obstacle.ccwRotationDegrees ?? 0) * Math.PI) / 180
+
+const getRectPoints = (
+  obstacle: NonNullable<SimpleRouteJson["obstacles"]>[number],
+  clearance = 0,
+) => {
+  const halfWidth = obstacle.width / 2 + clearance
+  const halfHeight = obstacle.height / 2 + clearance
+  const rotation = getRotationRadians(obstacle)
+  const cos = Math.cos(rotation)
+  const sin = Math.sin(rotation)
+  return [
+    { localX: -halfWidth, localY: -halfHeight },
+    { localX: halfWidth, localY: -halfHeight },
+    { localX: halfWidth, localY: halfHeight },
+    { localX: -halfWidth, localY: halfHeight },
+  ].map(({ localX, localY }) => ({
+    x: obstacle.center.x + localX * cos - localY * sin,
+    y: obstacle.center.y + localX * sin + localY * cos,
+  }))
+}
+
+const getOvalPoints = (
+  obstacle: NonNullable<SimpleRouteJson["obstacles"]>[number],
+) => {
+  const rx = obstacle.width / 2
+  const ry = obstacle.height / 2
+  const rotation = getRotationRadians(obstacle)
+  const cos = Math.cos(rotation)
+  const sin = Math.sin(rotation)
+  return Array.from({ length: 8 }, (_, index) => {
+    const angle = (2 * Math.PI * index) / 8
+    const localX = rx * Math.cos(angle)
+    const localY = ry * Math.sin(angle)
+    return {
+      x: obstacle.center.x + localX * cos - localY * sin,
+      y: obstacle.center.y + localX * sin + localY * cos,
+    }
+  })
+}
+
+const getOvalPolygonsFromSrj = (srj: SimpleRouteJson): Polygon[] =>
+  (srj.obstacles ?? [])
+    .filter((obstacle) => obstacle.type === "oval")
+    .map((obstacle) => ({
+      points: getOvalPoints(obstacle),
+      layers: obstacle.layers,
+      zLayers: obstacle.zLayers,
+      isCopperPour: obstacle.isCopperPour,
+    }))
+
+const getConnectedObstacleRegionsFromSrj = (
+  srj: SimpleRouteJson,
+  clearance: number,
+): PolyHyperGraphObstacleRegion[] =>
+  (srj.obstacles ?? []).flatMap((obstacle, obstacleIndex) => {
+    if (
+      !Array.isArray(obstacle.connectedTo) ||
+      obstacle.connectedTo.length === 0
+    ) {
+      return []
+    }
+
+    const availableZ = getAvailableZFromMask(
+      getObstacleLayerMask(obstacle as any, srj.layerCount),
+      srj.layerCount,
+    )
+    if (availableZ.length === 0) return []
+
+    let polygon: { x: number; y: number }[]
+    if (obstacle.type === "rect") {
+      polygon = getRectPoints(obstacle, clearance)
+    } else {
+      polygon = getOffsetPolygonPoints({
+        polygon: {
+          points: getOvalPoints(obstacle),
+          layers: obstacle.layers,
+          zLayers: obstacle.zLayers,
+          isCopperPour: obstacle.isCopperPour,
+        },
+        clearance,
+        verticesOnly: true,
+      })
+    }
+
+    return [
+      {
+        regionId: `connected-obstacle-${obstacleIndex}`,
+        polygon,
+        availableZ,
+        connectedTo: obstacle.connectedTo,
+        d: {
+          obstacleIndex,
+          obstacleType: obstacle.type,
+          connectedTo: obstacle.connectedTo,
+        },
+      },
+    ]
+  })
+
 const runFindConvexRegionsPoly = (scenario: Scenario): SolverMetrics => {
   const startedAt = performance.now()
   try {
     const srj = scenario.srj
+    const clearance = srj.defaultObstacleMargin ?? srj.minTraceWidth
     const convexRegions = computeConvexRegions({
       bounds: srj.bounds,
       rects: getRectsFromSrj(srj),
-      clearance: srj.defaultObstacleMargin ?? srj.minTraceWidth,
+      polygons: getOvalPolygonsFromSrj(srj),
+      clearance,
       concavityTolerance,
       layerCount: srj.layerCount,
       layerMergeMode,
       useConstrainedDelaunay: true,
       usePolyanyaMerge: true,
+      viaSegments: 8,
     })
     const graph = buildPolyHyperGraphFromRegions({
       regions: convexRegions.regions,
@@ -235,8 +347,10 @@ const runFindConvexRegionsPoly = (scenario: Scenario): SolverMetrics => {
           end: connection.pointsToConnect[1]!,
           simpleRouteConnection: connection,
         })),
+      obstacleRegions: getConnectedObstacleRegionsFromSrj(srj, clearance),
     })
     const loaded = loadSerializedHyperGraphAsPoly(graph as any)
+    applySerializedRegionNetIdsToLoadedProblem(loaded, graph)
     const solver = new PolyHyperGraphSolver(loaded.topology, loaded.problem, {
       DISTANCE_TO_COST: 0.05,
       RIP_THRESHOLD_START: 0.05,

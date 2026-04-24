@@ -3,11 +3,16 @@ import * as dataset01 from "@tscircuit/autorouting-dataset-01"
 import { GenericSolverDebugger } from "@tscircuit/solver-utils/react"
 import { useEffect, useMemo, useState } from "react"
 import {
+  applySerializedRegionNetIdsToLoadedProblem,
   buildPolyHyperGraphFromRegions,
   computeConvexRegions,
+  getAvailableZFromMask,
+  getObstacleLayerMask,
+  getOffsetPolygonPoints,
   PORT_MARGIN_FROM_SEGMENT_ENDPOINT,
   PORT_SPACING,
   type LayerMergeMode,
+  type PolyHyperGraphObstacleRegion,
   type Polygon,
   type Rect,
 } from "../lib/index"
@@ -48,6 +53,7 @@ type SimpleRouteObstacle = {
   zLayers?: number[]
   ccwRotationDegrees?: number
   isCopperPour?: boolean
+  connectedTo?: string[]
 }
 
 type SimpleRouteJson = {
@@ -85,6 +91,41 @@ const DEFAULT_EFFORT = 1
 const getRotationRadians = (obstacle: SimpleRouteObstacle) =>
   ((obstacle.ccwRotationDegrees ?? 0) * Math.PI) / 180
 
+const getRectPoints = (obstacle: SimpleRouteObstacle, clearance = 0) => {
+  const halfWidth = obstacle.width / 2 + clearance
+  const halfHeight = obstacle.height / 2 + clearance
+  const rotation = getRotationRadians(obstacle)
+  const cos = Math.cos(rotation)
+  const sin = Math.sin(rotation)
+  return [
+    { localX: -halfWidth, localY: -halfHeight },
+    { localX: halfWidth, localY: -halfHeight },
+    { localX: halfWidth, localY: halfHeight },
+    { localX: -halfWidth, localY: halfHeight },
+  ].map(({ localX, localY }) => ({
+    x: obstacle.center.x + localX * cos - localY * sin,
+    y: obstacle.center.y + localX * sin + localY * cos,
+  }))
+}
+
+const getOvalPoints = (obstacle: SimpleRouteObstacle) => {
+  const rx = obstacle.width / 2
+  const ry = obstacle.height / 2
+  const rotation = getRotationRadians(obstacle)
+  const cos = Math.cos(rotation)
+  const sin = Math.sin(rotation)
+  const segmentCount = 8
+  return Array.from({ length: segmentCount }, (_, index) => {
+    const angle = (2 * Math.PI * index) / segmentCount
+    const localX = rx * Math.cos(angle)
+    const localY = ry * Math.sin(angle)
+    return {
+      x: obstacle.center.x + localX * cos - localY * sin,
+      y: obstacle.center.y + localX * sin + localY * cos,
+    }
+  })
+}
+
 const getRectsFromSrj = (srj: SimpleRouteJson): Rect[] =>
   (srj.obstacles ?? [])
     .filter((obstacle) => obstacle.type === "rect")
@@ -102,21 +143,7 @@ const getOvalPolygonsFromSrj = (srj: SimpleRouteJson): Polygon[] =>
   (srj.obstacles ?? [])
     .filter((obstacle) => obstacle.type === "oval")
     .map((obstacle) => {
-      const rx = obstacle.width / 2
-      const ry = obstacle.height / 2
-      const rotation = getRotationRadians(obstacle)
-      const cos = Math.cos(rotation)
-      const sin = Math.sin(rotation)
-      const segmentCount = 8
-      const points = Array.from({ length: segmentCount }, (_, index) => {
-        const angle = (2 * Math.PI * index) / segmentCount
-        const localX = rx * Math.cos(angle)
-        const localY = ry * Math.sin(angle)
-        return {
-          x: obstacle.center.x + localX * cos - localY * sin,
-          y: obstacle.center.y + localX * sin + localY * cos,
-        }
-      })
+      const points = getOvalPoints(obstacle)
       return {
         points,
         layers: obstacle.layers,
@@ -124,6 +151,57 @@ const getOvalPolygonsFromSrj = (srj: SimpleRouteJson): Polygon[] =>
         isCopperPour: obstacle.isCopperPour,
       }
     })
+
+const getConnectedObstacleRegionsFromSrj = (
+  srj: SimpleRouteJson,
+  clearance: number,
+): PolyHyperGraphObstacleRegion[] =>
+  (srj.obstacles ?? []).flatMap((obstacle, obstacleIndex) => {
+    if (
+      !Array.isArray(obstacle.connectedTo) ||
+      obstacle.connectedTo.length === 0
+    ) {
+      return []
+    }
+
+    const availableZ = getAvailableZFromMask(
+      getObstacleLayerMask(obstacle as any, srj.layerCount),
+      srj.layerCount,
+    )
+    if (availableZ.length === 0) return []
+
+    let polygon: { x: number; y: number }[]
+    if (obstacle.type === "rect") {
+      polygon = getRectPoints(obstacle, clearance)
+    } else if (obstacle.type === "oval") {
+      polygon = getOffsetPolygonPoints({
+        polygon: {
+          points: getOvalPoints(obstacle),
+          layers: obstacle.layers,
+          zLayers: obstacle.zLayers,
+          isCopperPour: obstacle.isCopperPour,
+        },
+        clearance,
+        verticesOnly: true,
+      })
+    } else {
+      return []
+    }
+
+    return [
+      {
+        regionId: `connected-obstacle-${obstacleIndex}`,
+        polygon,
+        availableZ,
+        connectedTo: obstacle.connectedTo,
+        d: {
+          obstacleIndex,
+          obstacleType: obstacle.type,
+          connectedTo: obstacle.connectedTo,
+        },
+      },
+    ]
+  })
 
 const getRoutePairsFromSrj = (srj: SimpleRouteJson) =>
   srj.connections.flatMap((connection) => {
@@ -193,10 +271,15 @@ const createPolySolverForSample = (params: {
     availableZ: convexRegions.availableZ,
     layerCount: srj.layerCount,
     connections: getRoutePairsFromSrj(srj),
+    obstacleRegions: getConnectedObstacleRegionsFromSrj(srj, clearance),
     portSpacing,
     portMarginFromSegmentEndpoint,
   })
   const loaded = loadSerializedHyperGraphAsPoly(graph)
+  const reservedRegionCount = applySerializedRegionNetIdsToLoadedProblem(
+    loaded,
+    graph,
+  )
   const solverOptions = {
     DISTANCE_TO_COST: 0.05,
     RIP_THRESHOLD_START: 0.05,
@@ -226,6 +309,7 @@ const createPolySolverForSample = (params: {
     convexRegions,
     routePairCount: graph.connections.length,
     clearance,
+    reservedRegionCount,
   }
 }
 
@@ -413,7 +497,8 @@ export default function Dataset01PolyHyperGraphDebuggerFixture() {
         <div style={{ fontSize: 12, color: "#5d6878" }}>
           {debugData.convexRegions.regions.length} regions,{" "}
           {debugData.graph.ports.length} ports, {debugData.routePairCount}{" "}
-          routes, clearance {debugData.clearance.toFixed(3)}, max cost{" "}
+          routes, {debugData.reservedRegionCount} reserved, clearance{" "}
+          {debugData.clearance.toFixed(3)}, max cost{" "}
           {regionCostStats.max.toFixed(4)}, avg cost{" "}
           {regionCostStats.avg.toFixed(4)}
         </div>

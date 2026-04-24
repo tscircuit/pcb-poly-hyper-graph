@@ -1,5 +1,6 @@
 export { BuildRegionsSolver } from "./BuildRegionsSolver"
 export {
+  applySerializedRegionNetIdsToLoadedProblem,
   buildPolyHyperGraphFromRegions,
   PORT_MARGIN_FROM_SEGMENT_ENDPOINT,
   PORT_SPACING,
@@ -67,5 +68,6 @@ export type {
 export type {
   PolyHyperGraphConnection,
   PolyHyperGraphConnectionPoint,
+  PolyHyperGraphObstacleRegion,
   SerializedPolyHyperGraph,
 } from "./build-poly-hyper-graph"
