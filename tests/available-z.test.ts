@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test"
-import { buildPolyHyperGraphFromRegions } from "../lib/build-poly-hyper-graph"
+import {
+  buildPolyHyperGraphFromRegions,
+  PORT_MARGIN_FROM_SEGMENT_ENDPOINT,
+  PORT_SPACING,
+} from "../lib/build-poly-hyper-graph"
 import { computeConvexRegions } from "../lib/computeConvexRegions"
 import type { Point } from "../lib/types"
 
@@ -88,10 +92,80 @@ test("buildPolyHyperGraphFromRegions emits z-specific shared ports", () => {
       [0, 1, 2, 3],
     ],
     layerCount: 4,
+    portSpacing: 10,
+    portMarginFromSegmentEndpoint: 0.1,
   })
 
   expect(graph.regions).toHaveLength(2)
   expect(graph.ports.map((port) => port.d.z).sort()).toEqual([0, 2, 3])
   expect(graph.regions[0]?.pointIds).toHaveLength(3)
   expect(graph.regions[1]?.pointIds).toHaveLength(3)
+})
+
+test("buildPolyHyperGraphFromRegions spaces ports along long shared segments", () => {
+  const graph = buildPolyHyperGraphFromRegions({
+    regions: [
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 10 },
+        { x: 0, y: 10 },
+      ],
+      [
+        { x: 10, y: 0 },
+        { x: 20, y: 0 },
+        { x: 20, y: 10 },
+        { x: 10, y: 10 },
+      ],
+    ],
+    availableZ: [[0], [0]],
+    layerCount: 1,
+    portSpacing: 2,
+    portMarginFromSegmentEndpoint: 1,
+  })
+
+  const sharedPorts = graph.ports.filter(
+    (port) => port.region1Id === "free-0" && port.region2Id === "free-1",
+  )
+
+  expect(sharedPorts).toHaveLength(5)
+  expect(sharedPorts.map((port) => port.d.x)).toEqual([10, 10, 10, 10, 10])
+  expect(sharedPorts.map((port) => port.d.y).sort((a, b) => a - b)).toEqual([
+    1, 3, 5, 7, 9,
+  ])
+  expect(
+    sharedPorts
+      .map((port) => port.d.distToCentermostPortOnZ)
+      .sort((a, b) => a - b),
+  ).toEqual([0, 2, 2, 4, 4])
+  expect(graph.regions[0]?.pointIds).toHaveLength(5)
+  expect(graph.regions[1]?.pointIds).toHaveLength(5)
+})
+
+test("buildPolyHyperGraphFromRegions defaults to dense 0.25mm side ports", () => {
+  expect(PORT_SPACING).toBe(0.25)
+  expect(PORT_MARGIN_FROM_SEGMENT_ENDPOINT).toBe(0.25)
+
+  const graph = buildPolyHyperGraphFromRegions({
+    regions: [
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 1 },
+        { x: 0, y: 1 },
+      ],
+      [
+        { x: 10, y: 0 },
+        { x: 20, y: 0 },
+        { x: 20, y: 1 },
+        { x: 10, y: 1 },
+      ],
+    ],
+    availableZ: [[0], [0]],
+    layerCount: 1,
+  })
+
+  expect(graph.ports.map((port) => port.d.y).sort((a, b) => a - b)).toEqual([
+    0.25, 0.5, 0.75,
+  ])
 })

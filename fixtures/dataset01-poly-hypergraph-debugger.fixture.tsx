@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react"
 import {
   buildPolyHyperGraphFromRegions,
   computeConvexRegions,
+  PORT_MARGIN_FROM_SEGMENT_ENDPOINT,
+  PORT_SPACING,
   type LayerMergeMode,
   type Polygon,
   type Rect,
@@ -158,6 +160,8 @@ const createPolySolverForSample = (params: {
   concavityTolerance: number
   layerMergeMode: LayerMergeMode
   effort: number
+  portSpacing: number
+  portMarginFromSegmentEndpoint: number
 }) => {
   const {
     tinyHypergraph,
@@ -166,6 +170,8 @@ const createPolySolverForSample = (params: {
     concavityTolerance,
     layerMergeMode,
     effort,
+    portSpacing,
+    portMarginFromSegmentEndpoint,
   } = params
   const { PolyHyperGraphSolver, loadSerializedHyperGraphAsPoly } =
     tinyHypergraph
@@ -187,18 +193,31 @@ const createPolySolverForSample = (params: {
     availableZ: convexRegions.availableZ,
     layerCount: srj.layerCount,
     connections: getRoutePairsFromSrj(srj),
+    portSpacing,
+    portMarginFromSegmentEndpoint,
   })
   const loaded = loadSerializedHyperGraphAsPoly(graph)
-  const solver = new PolyHyperGraphSolver(loaded.topology, loaded.problem, {
+  const solverOptions = {
     DISTANCE_TO_COST: 0.05,
     RIP_THRESHOLD_START: 0.05,
     RIP_THRESHOLD_END: 0.8,
     RIP_CONGESTION_REGION_COST_FACTOR: 0.1,
     RIP_THRESHOLD_RAMP_ATTEMPTS: Math.max(1, Math.ceil(10 * effort)),
     MAX_ITERATIONS: Math.max(100_000, Math.ceil(10_000_000 * effort)),
-  })
+    portSpacing,
+    portMarginFromSegmentEndpoint,
+  }
+  const solver = new PolyHyperGraphSolver(
+    loaded.topology,
+    loaded.problem,
+    solverOptions,
+  )
 
-  solver.getConstructorParams = () => [graph]
+  solver.getConstructorParams = () => [
+    loaded.topology,
+    loaded.problem,
+    solverOptions,
+  ]
   solver.getSolverName = () => `Dataset01PolyHyperGraphSolver(${sampleName})`
 
   return {
@@ -217,6 +236,9 @@ export default function Dataset01PolyHyperGraphDebuggerFixture() {
   )
   const [layerMergeMode, setLayerMergeMode] = useState<LayerMergeMode>("same")
   const [effort, setEffort] = useState(DEFAULT_EFFORT)
+  const [portSpacing, setPortSpacing] = useState(PORT_SPACING)
+  const [portMarginFromSegmentEndpoint, setPortMarginFromSegmentEndpoint] =
+    useState(PORT_MARGIN_FROM_SEGMENT_ENDPOINT)
   const [tinyHypergraph, setTinyHypergraph] = useState<any>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -247,6 +269,8 @@ export default function Dataset01PolyHyperGraphDebuggerFixture() {
       concavityTolerance,
       layerMergeMode,
       effort,
+      portSpacing,
+      portMarginFromSegmentEndpoint,
     })
   }, [
     srj,
@@ -255,6 +279,8 @@ export default function Dataset01PolyHyperGraphDebuggerFixture() {
     concavityTolerance,
     layerMergeMode,
     effort,
+    portSpacing,
+    portMarginFromSegmentEndpoint,
   ])
 
   const solverKey = JSON.stringify({
@@ -262,6 +288,8 @@ export default function Dataset01PolyHyperGraphDebuggerFixture() {
     concavityTolerance,
     layerMergeMode,
     effort,
+    portSpacing,
+    portMarginFromSegmentEndpoint,
   })
 
   const regionCostStats = debugData
@@ -352,6 +380,32 @@ export default function Dataset01PolyHyperGraphDebuggerFixture() {
             step={0.01}
             value={effort}
             onChange={(event) => setEffort(Number(event.target.value))}
+            style={{ width: 76 }}
+          />
+        </label>
+
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          Port spacing
+          <input
+            type="number"
+            min={0.01}
+            step={0.05}
+            value={portSpacing}
+            onChange={(event) => setPortSpacing(Number(event.target.value))}
+            style={{ width: 76 }}
+          />
+        </label>
+
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          Port margin
+          <input
+            type="number"
+            min={0}
+            step={0.05}
+            value={portMarginFromSegmentEndpoint}
+            onChange={(event) =>
+              setPortMarginFromSegmentEndpoint(Number(event.target.value))
+            }
             style={{ width: 76 }}
           />
         </label>

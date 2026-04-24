@@ -1,5 +1,9 @@
 export { BuildRegionsSolver } from "./BuildRegionsSolver"
-export { buildPolyHyperGraphFromRegions } from "./build-poly-hyper-graph"
+export {
+  buildPolyHyperGraphFromRegions,
+  PORT_MARGIN_FROM_SEGMENT_ENDPOINT,
+  PORT_SPACING,
+} from "./build-poly-hyper-graph"
 export { buildRegionsFromCells } from "./buildRegionsFromCells"
 export { ConvexRegionsSolver } from "./ConvexRegionsSolver"
 export { computeConvexRegions } from "./computeConvexRegions"

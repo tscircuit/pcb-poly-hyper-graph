@@ -36,6 +36,7 @@ export type SerializedPolyHyperGraph = {
       x: number
       y: number
       z: number
+      distToCentermostPortOnZ: number
     }
   }>
   connections: Array<{
@@ -46,6 +47,11 @@ export type SerializedPolyHyperGraph = {
     simpleRouteConnection?: unknown
   }>
 }
+
+export const PORT_MARGIN_FROM_SEGMENT_ENDPOINT = 0.25
+export const PORT_SPACING = 0.25
+
+const EPSILON = 1e-9
 
 const roundPointCoord = (value: number) => Math.round(value * 1e6) / 1e6
 
@@ -148,6 +154,51 @@ const createTerminalPolygon = (point: Point, size = 1e-6): Point[] => [
   { x: point.x, y: point.y + size },
 ]
 
+const getPortPointsAlongSegment = (
+  a: Point,
+  b: Point,
+  portSpacing: number,
+  portMarginFromSegmentEndpoint: number,
+) => {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const length = Math.hypot(dx, dy)
+  if (length < EPSILON) return []
+
+  const safeSpacing =
+    Number.isFinite(portSpacing) && portSpacing > EPSILON
+      ? portSpacing
+      : PORT_SPACING
+  const requestedMargin = Number.isFinite(portMarginFromSegmentEndpoint)
+    ? Math.max(0, portMarginFromSegmentEndpoint)
+    : PORT_MARGIN_FROM_SEGMENT_ENDPOINT
+  const endpointMargin = Math.min(requestedMargin, length / 2)
+  const usableLength = length - endpointMargin * 2
+
+  if (usableLength <= safeSpacing * 0.75) {
+    return [
+      {
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
+        distToCentermostPortOnZ: 0,
+      },
+    ]
+  }
+
+  const intervalCount = Math.max(1, Math.round(usableLength / safeSpacing))
+
+  return Array.from({ length: intervalCount + 1 }, (_, index) => {
+    const distanceFromStart =
+      endpointMargin + (usableLength * index) / intervalCount
+    const t = distanceFromStart / length
+    return {
+      x: a.x + dx * t,
+      y: a.y + dy * t,
+      distToCentermostPortOnZ: Math.abs(distanceFromStart - length / 2),
+    }
+  })
+}
+
 export const buildPolyHyperGraphFromRegions = (params: {
   regions: Point[][]
   availableZ?: number[][]
@@ -155,6 +206,8 @@ export const buildPolyHyperGraphFromRegions = (params: {
   connections?: PolyHyperGraphConnection[]
   regionIdPrefix?: string
   portIdPrefix?: string
+  portSpacing?: number
+  portMarginFromSegmentEndpoint?: number
 }): SerializedPolyHyperGraph => {
   const {
     regions,
@@ -163,6 +216,8 @@ export const buildPolyHyperGraphFromRegions = (params: {
     connections = [],
     regionIdPrefix = "free",
     portIdPrefix = "shared-port",
+    portSpacing = PORT_SPACING,
+    portMarginFromSegmentEndpoint = PORT_MARGIN_FROM_SEGMENT_ENDPOINT,
   } = params
   const fallbackAvailableZ = Array.from({ length: layerCount }, (_, z) => z)
   const serializedRegions: SerializedPolyHyperGraph["regions"] = regions.map(
@@ -216,26 +271,37 @@ export const buildPolyHyperGraphFromRegions = (params: {
     )
     if (sharedZ.length === 0) continue
 
-    const x = (first!.a.x + first!.b.x) / 2
-    const y = (first!.a.y + first!.b.y) / 2
+    const portPoints = getPortPointsAlongSegment(
+      first!.a,
+      first!.b,
+      portSpacing,
+      portMarginFromSegmentEndpoint,
+    )
+    if (portPoints.length === 0) continue
 
-    for (const z of sharedZ) {
-      const portId = `${portIdPrefix}-${String(portIndex).padStart(5, "0")}::${z}`
-      ports.push({
-        portId,
-        region1Id: `${regionIdPrefix}-${first!.regionIndex}`,
-        region2Id: `${regionIdPrefix}-${second!.regionIndex}`,
-        d: {
+    for (let pointIndex = 0; pointIndex < portPoints.length; pointIndex++) {
+      const portPoint = portPoints[pointIndex]!
+      for (const z of sharedZ) {
+        const portId = `${portIdPrefix}-${String(portIndex).padStart(
+          5,
+          "0",
+        )}::p${pointIndex}::z${z}`
+        ports.push({
           portId,
-          x,
-          y,
-          z,
-          distToCentermostPortOnZ: 0,
-        },
-      })
-      serializedRegions[first!.regionIndex]!.pointIds.push(portId)
-      serializedRegions[second!.regionIndex]!.pointIds.push(portId)
-      portIndex += 1
+          region1Id: `${regionIdPrefix}-${first!.regionIndex}`,
+          region2Id: `${regionIdPrefix}-${second!.regionIndex}`,
+          d: {
+            portId,
+            x: portPoint.x,
+            y: portPoint.y,
+            z,
+            distToCentermostPortOnZ: portPoint.distToCentermostPortOnZ,
+          },
+        })
+        serializedRegions[first!.regionIndex]!.pointIds.push(portId)
+        serializedRegions[second!.regionIndex]!.pointIds.push(portId)
+        portIndex += 1
+      }
     }
   }
 
