@@ -77,6 +77,9 @@ const defaultSampleName =
   sampleEntries[0]?.[0] ??
   ""
 
+const DEFAULT_CONCAVITY_TOLERANCE = 0.75
+const DEFAULT_EFFORT = 1
+
 const getRotationRadians = (obstacle: SimpleRouteObstacle) =>
   ((obstacle.ccwRotationDegrees ?? 0) * Math.PI) / 180
 
@@ -176,7 +179,7 @@ const createPolySolverForSample = (params: {
     layerCount: srj.layerCount,
     layerMergeMode,
     useConstrainedDelaunay: true,
-    usePolyanyaMerge: true,
+    usePolyanyaMerge: false,
     viaSegments: 8,
   })
   const graph = buildPolyHyperGraphFromRegions({
@@ -209,9 +212,11 @@ const createPolySolverForSample = (params: {
 
 export default function Dataset01PolyHyperGraphDebuggerFixture() {
   const [sampleName, setSampleName] = useState(defaultSampleName)
-  const [concavityTolerance, setConcavityTolerance] = useState(0)
+  const [concavityTolerance, setConcavityTolerance] = useState(
+    DEFAULT_CONCAVITY_TOLERANCE,
+  )
   const [layerMergeMode, setLayerMergeMode] = useState<LayerMergeMode>("same")
-  const [effort, setEffort] = useState(0.1)
+  const [effort, setEffort] = useState(DEFAULT_EFFORT)
   const [tinyHypergraph, setTinyHypergraph] = useState<any>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
