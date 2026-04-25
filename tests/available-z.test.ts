@@ -300,5 +300,8 @@ test("buildPolyHyperGraphFromRegions connects obstacle ports across two-sided la
   )
 
   expect(topBoundaryPorts.length).toBeGreaterThan(0)
+  expect(topBoundaryPorts).toHaveLength(1)
+  expect(topBoundaryPorts[0]?.d.x).toBe(2)
+  expect(topBoundaryPorts[0]?.d.y).toBe(1)
   expect(blockedInteriorPorts).toHaveLength(0)
 })

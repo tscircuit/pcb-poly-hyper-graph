@@ -85,7 +85,7 @@ const defaultSampleName =
   sampleEntries[0]?.[0] ??
   ""
 
-const DEFAULT_CONCAVITY_TOLERANCE = 0.75
+const DEFAULT_CONCAVITY_TOLERANCE = 0.2
 const DEFAULT_EFFORT = 1
 
 const getRotationRadians = (obstacle: SimpleRouteObstacle) =>

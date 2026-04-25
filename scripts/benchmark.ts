@@ -73,7 +73,7 @@ const { PolyHyperGraphSolver, loadSerializedHyperGraphAsPoly } = (await import(
 const scenarioLimit = Number(process.env.SCENARIO_LIMIT ?? 20)
 const effort = Number(process.env.EFFORT ?? 0.1)
 const maxNodeDimension = Number(process.env.MAX_NODE_DIMENSION ?? 12)
-const concavityTolerance = Number(process.env.CONCAVITY_TOLERANCE ?? 0)
+const concavityTolerance = Number(process.env.CONCAVITY_TOLERANCE ?? 0.2)
 const layerMergeMode = (process.env.LAYER_MERGE_MODE ??
   "same") as LayerMergeMode
 

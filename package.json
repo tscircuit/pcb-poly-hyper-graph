@@ -23,7 +23,7 @@
     "@tscircuit/autorouting-dataset-01": "^1.0.53",
     "@tscircuit/capacity-autorouter": "^0.0.452",
     "@tscircuit/hypergraph": "^0.0.72",
-    "@tscircuit/solver-utils": "^0.0.14",
+    "@tscircuit/solver-utils": "^0.0.19",
     "@types/bun": "latest",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -34,7 +34,7 @@
     "react-cosmos": "^7.1.1",
     "react-cosmos-plugin-vite": "^7.1.1",
     "react-dom": "^19.2.4",
-    "tiny-hypergraph": "git+https://github.com/tscircuit/tiny-hypergraph.git#d0a8db86a66d0065bf82e5c6fbddae60b1b22b47",
+    "tiny-hypergraph": "git+https://github.com/tscircuit/tiny-hypergraph.git#7b93b4c",
     "tsup": "^8.5.1",
     "vite": "^7.3.1"
   },

@@ -254,6 +254,14 @@ const getPortPointsAlongSegment = (
   })
 }
 
+const getSinglePortPointOnSegment = (a: Point, b: Point) => {
+  if (Math.hypot(b.x - a.x, b.y - a.y) < EPSILON) return undefined
+  return {
+    ...segmentMidpoint(a, b),
+    distToCentermostPortOnZ: 0,
+  }
+}
+
 const getStringProperty = (value: unknown, key: string) => {
   if (typeof value !== "object" || value === null) return undefined
   const property = (value as Record<string, unknown>)[key]
@@ -533,30 +541,22 @@ export const buildPolyHyperGraphFromRegions = (params: {
         )
         if (sharedZ.length === 0) continue
 
-        const portPoints = getPortPointsAlongSegment(
-          meshEdge.a,
-          meshEdge.b,
-          portSpacing,
-          portMarginFromSegmentEndpoint,
-        )
-        if (portPoints.length === 0) continue
+        const portPoint = getSinglePortPointOnSegment(meshEdge.a, meshEdge.b)
+        if (!portPoint) continue
 
-        for (let pointIndex = 0; pointIndex < portPoints.length; pointIndex++) {
-          const portPoint = portPoints[pointIndex]!
-          for (const z of sharedZ) {
-            const portId = pushPort({
-              region1Id: `${regionIdPrefix}-${meshEdge.regionIndex}`,
-              region2Id: obstacleInfo.regionId,
-              pointIndex,
-              portPoint,
-              z,
-              portIdSuffix: "::obstacle",
-            })
-            serializedRegions[meshEdge.regionIndex]!.pointIds.push(portId)
-            serializedRegions[
-              obstacleInfo.serializedRegionIndex
-            ]!.pointIds.push(portId)
-          }
+        for (const z of sharedZ) {
+          const portId = pushPort({
+            region1Id: `${regionIdPrefix}-${meshEdge.regionIndex}`,
+            region2Id: obstacleInfo.regionId,
+            pointIndex: 0,
+            portPoint,
+            z,
+            portIdSuffix: "::obstacle",
+          })
+          serializedRegions[meshEdge.regionIndex]!.pointIds.push(portId)
+          serializedRegions[obstacleInfo.serializedRegionIndex]!.pointIds.push(
+            portId,
+          )
         }
       }
     }
