@@ -655,14 +655,6 @@ export const buildPolyHyperGraphFromRegions = (params: {
         if (!portPoint) continue
 
         for (const z of sharedZ) {
-          const hasSameLayerFreeNeighborOnEdge = entries.some((otherEdge) => {
-            if (otherEdge === meshEdge) return false
-            const otherAvailableZ =
-              availableZ?.[otherEdge.regionIndex] ?? fallbackAvailableZ
-            return otherAvailableZ.includes(z)
-          })
-          if (hasSameLayerFreeNeighborOnEdge) continue
-
           const portId = pushPort({
             region1Id: `${regionIdPrefix}-${meshEdge.regionIndex}`,
             region2Id: obstacleInfo.regionId,
