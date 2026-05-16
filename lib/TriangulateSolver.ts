@@ -4,7 +4,11 @@ import { constrainedDelaunay } from "./constrainedDelaunay"
 import { delaunay } from "./delaunay"
 import { filterTrisByAvailableZ } from "./filter-tris-by-available-z"
 import { filterTris } from "./filterTris"
-import type { TriangulateStageInput, TriangulateStageOutput } from "./types"
+import type {
+  Triangle,
+  TriangulateStageInput,
+  TriangulateStageOutput,
+} from "./types"
 
 export class TriangulateSolver extends BaseSolver {
   private readonly input: TriangulateStageInput
@@ -20,7 +24,7 @@ export class TriangulateSolver extends BaseSolver {
     const rects = this.input.rects ?? []
     const polygons = this.input.polygons ?? []
 
-    let validTris: import("./types").Triangle[]
+    let validTris: Triangle[]
     let triangleAvailableZ: number[][] | undefined
 
     if (

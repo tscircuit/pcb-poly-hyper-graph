@@ -11,6 +11,8 @@ import { mergeCellsPolyanya } from "./mergeCellsPolyanya"
 import type {
   ConvexRegionsComputeInput,
   ConvexRegionsComputeResult,
+  Point,
+  Triangle,
 } from "./types"
 
 const isDefinedPoint = <T>(value: T | undefined): value is T =>
@@ -24,12 +26,12 @@ export const computeConvexRegions = (
   const rects = input.rects ?? []
   const polygons = input.polygons ?? []
 
-  let pts: import("./types").Point[]
-  let validTris: import("./types").Triangle[]
+  let pts: Point[]
+  let validTris: Triangle[]
   let triangleAvailableZ: number[][] | undefined
 
   if (input.useConstrainedDelaunay !== false) {
-    const result = generateBoundaryPointsWithEdges({
+    let result = generateBoundaryPointsWithEdges({
       bounds,
       vias,
       clearance,
@@ -39,9 +41,26 @@ export const computeConvexRegions = (
       preserveObstacleBoundaries: input.layerCount !== undefined,
     })
     pts = result.pts
-    const cdtTris = constrainedDelaunay(pts, result.constraintEdges, {
+    let cdtPts = pts
+    if (input.layerCount !== undefined && result.hadCrossings) {
+      // cdt2d needs split constraint edges to meet exactly. Keep the jittered
+      // workspace points, but triangulate against the exact resolved PSLG.
+      result = generateBoundaryPointsWithEdges({
+        bounds,
+        vias,
+        clearance,
+        rects,
+        polygons,
+        viaSegments: input.viaSegments,
+        preserveObstacleBoundaries: true,
+        jitterAfterCrossingResolution: false,
+      })
+      cdtPts = result.pts
+    }
+    const cdtTris = constrainedDelaunay(cdtPts, result.constraintEdges, {
       includeConstraintInteriors: input.layerCount !== undefined,
     })
+
     if (input.layerCount !== undefined) {
       const filtered = filterTrisByAvailableZ({
         triangles: cdtTris,
