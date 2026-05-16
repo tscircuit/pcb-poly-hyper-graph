@@ -28,6 +28,7 @@ export const generateBoundaryPointsWithEdges = (params: {
   polygons?: Polygon[]
   viaSegments?: number
   preserveObstacleBoundaries?: boolean
+  jitterAfterCrossingResolution?: boolean
 }): {
   pts: Point[]
   constraintEdges: [number, number][]
@@ -41,6 +42,7 @@ export const generateBoundaryPointsWithEdges = (params: {
     polygons = [],
     viaSegments = 8,
     preserveObstacleBoundaries = false,
+    jitterAfterCrossingResolution = true,
   } = params
   const allPts: Point[] = []
   const constraintEdges: [number, number][] = []
@@ -129,7 +131,15 @@ export const generateBoundaryPointsWithEdges = (params: {
     ringBoundaries,
   )
 
-  // Tiny per-point jitter (~1e-6) prevents degenerate collinear inputs
+  if (!jitterAfterCrossingResolution) {
+    return {
+      pts: resolved.pts,
+      constraintEdges: resolved.constraintEdges,
+      hadCrossings: resolved.hadCrossings,
+    }
+  }
+
+  // Tiny per-point jitter (~1e-6) prevents degenerate collinear inputs.
   const jitteredPts = resolved.pts.map((pt, i) => ({
     x: pt.x + ((i % 7) - 3) * 1e-6,
     y: pt.y + ((i % 5) - 2) * 1e-6,

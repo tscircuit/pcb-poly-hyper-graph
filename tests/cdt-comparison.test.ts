@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import circuit100 from "@tscircuit/autorouting-dataset-01/lib/dataset/circuit100.simple-route.json"
 import { ConvexRegionsSolver } from "../lib/ConvexRegionsSolver"
 import { computeConvexRegions } from "../lib/computeConvexRegions"
 import { constrainedDelaunay } from "../lib/constrainedDelaunay"
@@ -14,6 +15,48 @@ import {
 } from "./cdt-comparison.shared"
 import { createPolygonObstaclesInput } from "./polygon-obstacles.shared"
 import { createStaggeredJumpersInput } from "./staggered-jumpers.shared"
+
+type DatasetObstacle = {
+  type: string
+  center: { x: number; y: number }
+  width: number
+  height: number
+  layers?: string[]
+  zLayers?: number[]
+  connectedTo?: string[]
+  ccwRotationDegrees?: number
+  isCopperPour?: boolean
+}
+
+type DatasetSimpleRouteJson = {
+  bounds: { minX: number; maxX: number; minY: number; maxY: number }
+  obstacles?: DatasetObstacle[]
+  layerCount: number
+  minTraceWidth: number
+  defaultObstacleMargin?: number
+}
+
+const circuit100Srj = circuit100 as DatasetSimpleRouteJson
+
+const getDatasetObstacleRotation = (obstacle: DatasetObstacle) =>
+  ((obstacle.ccwRotationDegrees ?? 0) * Math.PI) / 180
+
+const getDatasetOvalPoints = (obstacle: DatasetObstacle) => {
+  const rx = obstacle.width / 2
+  const ry = obstacle.height / 2
+  const rotation = getDatasetObstacleRotation(obstacle)
+  const cos = Math.cos(rotation)
+  const sin = Math.sin(rotation)
+  return Array.from({ length: 8 }, (_, index) => {
+    const angle = (2 * Math.PI * index) / 8
+    const localX = rx * Math.cos(angle)
+    const localY = ry * Math.sin(angle)
+    return {
+      x: obstacle.center.x + localX * cos - localY * sin,
+      y: obstacle.center.y + localX * sin + localY * cos,
+    }
+  })
+}
 
 // --- Core triangulation tests: prove unconstrained fails, CDT fixes it ---
 
@@ -97,6 +140,46 @@ test("CDT pipeline: staggered jumpers regression", () => {
 
   expect(result.regions.length).toBeGreaterThanOrEqual(1)
   expect(result.validTris.length).toBeGreaterThanOrEqual(1)
+})
+
+test("CDT pipeline: dataset01 circuit100 resolves crossing constraints before triangulation", () => {
+  const rects = (circuit100Srj.obstacles ?? [])
+    .filter((obstacle) => obstacle.type === "rect")
+    .map((obstacle) => ({
+      center: obstacle.center,
+      width: obstacle.width,
+      height: obstacle.height,
+      ccwRotation: getDatasetObstacleRotation(obstacle),
+      layers: obstacle.layers,
+      zLayers: obstacle.zLayers,
+      isCopperPour: obstacle.isCopperPour,
+    }))
+  const polygons = (circuit100Srj.obstacles ?? [])
+    .filter((obstacle) => obstacle.type === "oval")
+    .map((obstacle) => ({
+      points: getDatasetOvalPoints(obstacle),
+      layers: obstacle.layers,
+      zLayers: obstacle.zLayers,
+      isCopperPour: obstacle.isCopperPour,
+    }))
+
+  const result = computeConvexRegions({
+    bounds: circuit100Srj.bounds,
+    rects,
+    polygons,
+    clearance:
+      circuit100Srj.defaultObstacleMargin ?? circuit100Srj.minTraceWidth,
+    concavityTolerance: 0.2,
+    layerCount: circuit100Srj.layerCount,
+    layerMergeMode: "same",
+    useConstrainedDelaunay: true,
+    usePolyanyaMerge: false,
+    viaSegments: 8,
+  })
+
+  expect(result.validTris.length).toBeGreaterThan(0)
+  expect(result.regions.length).toBeGreaterThan(0)
+  expect(result.availableZ?.length).toBe(result.regions.length)
 })
 
 test("CDT pipeline: thin horizontal wall — solver SVG snapshot", async () => {
