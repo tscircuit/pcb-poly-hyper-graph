@@ -18,6 +18,7 @@
     "start": "cosmos",
     "build:site": "cosmos-export",
     "benchmark": "bun run scripts/benchmark.ts",
+    "typecheck:consumer": "tsc --project tsconfig.consumer.json",
     "format:check": "biome format .",
     "format": "biome format --write ."
   },

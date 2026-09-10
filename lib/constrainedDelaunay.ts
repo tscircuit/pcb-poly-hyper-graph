@@ -1,3 +1,5 @@
+/// <reference path="./cdt2d.d.ts" />
+
 import cdt2d from "cdt2d"
 import type { Point, Triangle } from "./types"
 
