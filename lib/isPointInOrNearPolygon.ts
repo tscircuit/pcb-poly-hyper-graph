@@ -5,6 +5,7 @@ import {
   segment,
 } from "@flatten-js/core"
 import type { Point } from "./types"
+import { normalizePolygonPoints } from "./normalizePolygonPoints"
 
 /**
  * Check if a point is inside a polygon or within clearance distance of it
@@ -16,11 +17,12 @@ export const isPointInOrNearPolygon = (params: {
   clearance: number
 }): boolean => {
   const { px, py, polygonPoints, clearance } = params
-  const n = polygonPoints.length
+  const normalizedPoints = normalizePolygonPoints(polygonPoints)
+  const n = normalizedPoints.length
   if (n < 3) return false
 
   // Create Flatten polygon from points using segments
-  const pts = polygonPoints.map((p) => point(p.x, p.y))
+  const pts = normalizedPoints.map((p) => point(p.x, p.y))
   const shapes: Segment[] = []
   for (let i = 0; i < pts.length; i++) {
     const p1 = pts[i]!

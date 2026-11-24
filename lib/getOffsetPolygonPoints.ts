@@ -8,6 +8,7 @@ import {
   vector,
 } from "@flatten-js/core"
 import type { Point, Polygon } from "./types"
+import { normalizePolygonPoints } from "./normalizePolygonPoints"
 
 /**
  * Generate offset polygon points by offsetting each edge outward and sampling along them.
@@ -19,7 +20,7 @@ export const getOffsetPolygonPoints = (params: {
   verticesOnly?: boolean
 }): Point[] => {
   const { polygon, clearance, verticesOnly = false } = params
-  const pts = polygon.points
+  const pts = normalizePolygonPoints(polygon.points)
   const n = pts.length
   if (n < 3) return []
 
